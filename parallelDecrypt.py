@@ -11,13 +11,13 @@ import pyodbc
 def retrieve_encryption_info(db_file, file_id):
     conn = pyodbc.connect('DRIVER={SQL Server};SERVER=DESKTOP-QRNR7JP\\SQLEXPRESS;DATABASE=' + db_file + ';Trusted_Connection=yes;')
     c = conn.cursor()
-    c.execute('''SELECT chunk_size1, chunk_size2, chunk_size3, chunk_size4, chunk_size5, chunk_size6, chunk_size7, chunk_size8, chunk_size9, chunk_size10, chunk_size11, chunk_size12, salt FROM EncryptionInfo WHERE id = ?''', (file_id,))
+    c.execute('''SELECT chunk_size1,salt FROM EncryptionInfo WHERE id = ?''', (file_id,))
     result = c.fetchone()
     conn.close()
     dbchunk = []
     if result:
-        dbchunk = result[:-1]
-        salt = result[-1]
+        dbchunk = result[0]
+        salt = result[1]
         return dbchunk,salt
     else:
         return None, None

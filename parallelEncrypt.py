@@ -11,20 +11,16 @@ import psutil
 
 
 # Function to insert encryption information into the database
-def insert_or_update_encryption_info(db_file, chunk_sizes1, chunk_sizes2, chunk_sizes3, chunk_sizes4, chunk_sizes5, chunk_sizes6, chunk_sizes7, chunk_sizes8, chunk_sizes9, chunk_sizes10, chunk_sizes11, chunk_sizes12, salt,user_id):
+def insert_or_update_encryption_info(db_file, chunk_sizes1, salt,user_id):
     try:
         conn = pyodbc.connect('DRIVER={SQL Server};SERVER=DESKTOP-QRNR7JP\\SQLEXPRESS;DATABASE=' + db_file + ';Trusted_Connection=yes;')
         c = conn.cursor()
         # Insert or replace encryption information in the table
 
         c.execute('''INSERT INTO EncryptionInfo 
-                    (chunk_size1, chunk_size2, chunk_size3, chunk_size4, chunk_size5, 
-                    chunk_size6, chunk_size7, chunk_size8, chunk_size9, chunk_size10, 
-                    chunk_size11, chunk_size12, salt, user_id) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                (chunk_sizes1, chunk_sizes2, chunk_sizes3, chunk_sizes4, 
-                    chunk_sizes5, chunk_sizes6, chunk_sizes7, chunk_sizes8, chunk_sizes9, 
-                    chunk_sizes10, chunk_sizes11, chunk_sizes12, salt, user_id))
+                    (chunk_size1, salt, user_id) 
+                    VALUES (?, ?, ?)''',
+                (chunk_sizes1, salt, user_id))
         conn.commit()
         c.execute('SELECT id from EncryptionInfo where salt=?',(salt,) )
         file_id= c.fetchone()
@@ -51,7 +47,9 @@ def encrypt_AES(key, plaintext, output_file, semaphore, id, id_var, shared_arr):
             if id_var.value == id:
                 if semaphore.acquire(timeout=0.5):  # Try acquiring semaphore with a timeout
                     with open(output_file, 'ab') as f:
-                        shared_arr[id-1] = ciphernoncelen
+                        if id == 1:
+                            shared_arr[id-1] = ciphernoncelen
+                        
                         f.write(nonce + cipher_data)
                     id_var.value = id + 1
                     semaphore.release()

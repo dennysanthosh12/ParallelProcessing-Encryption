@@ -11,11 +11,10 @@ from PyQt5.QtCore import Qt
 from database import DatabaseManager
 from login_ui import Ui_Dialog as LoginDialog
 from register_ui import Ui_Dialog as RegisterDialog
-from cryptography.hazmat.primitives.asymmetric import rsa
-from Crypto.Cipher import PKCS1_OAEP
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
+import logging
 
 from parallelEncrypt import encrypt_AES,enough_memory_for_process,insert_or_update_encryption_info
 from parallelDecrypt import retrieve_encryption_info, decrypt_AES
@@ -243,118 +242,145 @@ class CryptoApp(QWidget):
 
 
     def encrypt_file(self):
-        input_file, _ = QFileDialog.getOpenFileName(self, 'Select File to Encrypt', '', 'All Files (*)')
-        if not input_file:
-            return
-        
-        _, extension = os.path.splitext(input_file)
-
-        # Construct the output file path with the "Encrypted" prefix and the same extension
-        output_file = f'Encrypted{extension}'
-        
-        input_dialog = CustomInputDialog(self)
-        if input_dialog.exec_():
-            password, pass_length, receiver_email = input_dialog.get_inputs()
-        else:
-            return
-        receiver_public_key = self.get_public_key(receiver_email)
-        if receiver_public_key is None:
-            msg_box = QMessageBox()
-            msg_box.setStyleSheet(
-                "QMessageBox {background-color: #040840; color: white;}"  # Set background color to dark and text color to white
-                "QMessageBox QLabel {color: white;}"  # Set the label text color to white
-                "QMessageBox QPushButton {background-color: #4CAF50; color: white;}"  # Set button background color to green and text color to white
-            )
-            QMessageBox.critical(msg_box, 'Error', f'Public key for receiver {receiver_email} not found.')
-            return
-        
         try:
-            # Launch encryption process
-            passlength = int(pass_length.replace(" ", "").replace("\t", "").replace("\n", ""))
-            if passlength not in [16,24,32]:
-                msg_box = QMessageBox()
-                msg_box.setStyleSheet(
-                "QMessageBox {background-color: #040840; color: white;}"  # Set background color to dark and text color to white
-                "QMessageBox QLabel {color: white;}"  # Set the label text color to white
-                "QMessageBox QPushButton {background-color: #4CAF50; color: white;}"  # Set button background color to green and text color to white
-            )
-                QMessageBox.critical(msg_box,'Key Size can be only 16,24,32 bytes')
+            input_file, _ = QFileDialog.getOpenFileName(self, 'Select File to Encrypt', '', 'All Files (*)')
+            if not input_file:
                 return
-            db_file = 'app_database'
-            start = time.time()
-            salt = get_random_bytes(passlength)
-            key = PBKDF2(password, salt, dkLen=passlength)
-            file_size = os.path.getsize(input_file)
-            if file_size == 0:
-                msg_box = QMessageBox()
-                msg_box.setStyleSheet(
-                "QMessageBox {background-color: #040840; color: white;}"  # Set background color to dark and text color to white
-                "QMessageBox QLabel {color: white;}"  # Set the label text color to white
-                "QMessageBox QPushButton {background-color: #4CAF50; color: white;}"  # Set button background color to green and text color to white
-            )
-                QMessageBox.critical(msg_box,'The Selected file is empty ')
-                return
-            encrypted_salt = receiver_public_key.encrypt(
-                salt,
-                padding.OAEP(
-                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                    algorithm=hashes.SHA256(),
-                    label=None
-                )
-            )
-            semaphore = mp.Semaphore(1)
-            processor_count = mp.cpu_count()
-            shared_arr = mp.Array('i', [0] * processor_count)
-            id_var = mp.Value('i', 1)
-            chunksize = file_size // processor_count  
-            if not enough_memory_for_process(chunksize):
-                msg_box = QMessageBox()
-                msg_box.setStyleSheet(
-                "QMessageBox {background-color: #040840; color: white;}"  # Set background color to dark and text color to white
-                "QMessageBox QLabel {color: white;}"  # Set the label text color to white
-                "QMessageBox QPushButton {background-color: #4CAF50; color: white;}"  # Set button background color to green and text color to white
-            )
-                QMessageBox.critical(msg_box,'Not enough memory!!')
-                return
-            if file_size % processor_count != 0: 
-                chunksize += 1
-            processes = []
-            i = 0
-            with open(input_file, 'rb') as f_input:
-                while True:
-                    i += 1
-                    chunk = f_input.read(chunksize)
-                    if not chunk:
-                        break
-                    while not enough_memory_for_process(chunksize):
-                        time.sleep(0.3)
-                    p = mp.Process(target=encrypt_AES, args=(key, chunk, output_file, semaphore, i, id_var, shared_arr))
-                    processes.append(p)
-                    p.start()
-
-            for process in processes:
-                process.join()
-                
-            file_id = insert_or_update_encryption_info(db_file, shared_arr[0], shared_arr[1], shared_arr[2], shared_arr[3], shared_arr[4], shared_arr[5], shared_arr[6], shared_arr[7], shared_arr[8], shared_arr[9], shared_arr[10], shared_arr[11],encrypted_salt,self.user_id)
-
             
-            end = time.time()
-            duration = end - start
+            _, extension = os.path.splitext(input_file)
+
+            # Construct the output file path with the "Encrypted" prefix and the same extension
+            output_file = f'Encrypted{extension}'
+            
+            input_dialog = CustomInputDialog(self)
+            if input_dialog.exec_():
+                password, pass_length, receiver_email = input_dialog.get_inputs()
+            else:
+                return
+            receiver_public_key = self.get_public_key(receiver_email)
+            if receiver_public_key is None:
+                msg_box = QMessageBox()
+                msg_box.setStyleSheet(
+                    "QMessageBox {background-color: #040840; color: white;}"  # Set background color to dark and text color to white
+                    "QMessageBox QLabel {color: white;}"  # Set the label text color to white
+                    "QMessageBox QPushButton {background-color: #4CAF50; color: white;}"  # Set button background color to green and text color to white
+                )
+                QMessageBox.critical(msg_box, 'Error', f'Public key for receiver {receiver_email} not found.')
+                return
+            
+            try:
+                # Launch encryption process
+                passlength = int(pass_length.replace(" ", "").replace("\t", "").replace("\n", ""))
+                if passlength not in [16,24,32]:
+                    msg_box = QMessageBox()
+                    msg_box.setStyleSheet(
+                    "QMessageBox {background-color: #040840; color: white;}"  # Set background color to dark and text color to white
+                    "QMessageBox QLabel {color: white;}"  # Set the label text color to white
+                    "QMessageBox QPushButton {background-color: #4CAF50; color: white;}"  # Set button background color to green and text color to white
+                )
+                    QMessageBox.critical(msg_box,'Key Size can be only 16,24,32 bytes')
+                    return
+                db_file = 'app_database'
+                start = time.time()
+                salt = get_random_bytes(passlength)
+                key = PBKDF2(password, salt, dkLen=passlength)
+                max_size = 2 * 1024 * 1024 * 1024
+                file_size = os.path.getsize(input_file)
+                if file_size == 0:
+                    msg_box = QMessageBox()
+                    msg_box.setStyleSheet(
+                    "QMessageBox {background-color: #040840; color: white;}"  # Set background color to dark and text color to white
+                    "QMessageBox QLabel {color: white;}"  # Set the label text color to white
+                    "QMessageBox QPushButton {background-color: #4CAF50; color: white;}"  # Set button background color to green and text color to white
+                )
+                    QMessageBox.critical(msg_box,'The Selected file is empty ')
+                    return
+                encrypted_salt = receiver_public_key.encrypt(
+                    salt,
+                    padding.OAEP(
+                        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                        algorithm=hashes.SHA256(),
+                        label=None
+                    )
+                )
+                semaphore = mp.Semaphore(1)
+                processor_count = mp.cpu_count()
+                shared_arr = mp.Array('i', [0])
+                id_var = mp.Value('i', 1)
+                if file_size > max_size:
+                    chunksize = 100 * 1024*1024
+                else:
+                    chunksize = file_size // processor_count  
+                
+                if not enough_memory_for_process(chunksize):
+                    msg_box = QMessageBox()
+                    msg_box.setStyleSheet(
+                    "QMessageBox {background-color: #040840; color: white;}"  # Set background color to dark and text color to white
+                    "QMessageBox QLabel {color: white;}"  # Set the label text color to white
+                    "QMessageBox QPushButton {background-color: #4CAF50; color: white;}"  # Set button background color to green and text color to white
+                )
+                    QMessageBox.critical(msg_box,'Not enough memory!!')
+                    return
+                if file_size % processor_count != 0: 
+                    chunksize += 1
+                processes = []
+                i = 0
+                with open(input_file, 'rb') as f_input:
+                    while True:
+                        i += 1
+                        chunk = f_input.read(chunksize)
+                        if not chunk:
+                            break
+                        while not enough_memory_for_process(chunksize):
+                            time.sleep(0.3)
+                        p = mp.Process(target=encrypt_AES, args=(key, chunk, output_file, semaphore, i, id_var, shared_arr))
+                        processes.append(p)
+                        p.start()
+
+                for process in processes:
+                    process.join()
+                    
+                file_id = insert_or_update_encryption_info(db_file, shared_arr[0],encrypted_salt,self.user_id)
+
+                
+                end = time.time()
+                duration = end - start
+                msg_box = QMessageBox()
+                msg_box.setStyleSheet(
+                    "QMessageBox {background-color: #040840; color: white;}"  # Set background color to dark and text color to white
+                    "QMessageBox QLabel {color: white;}"  # Set the label text color to white
+                    "QMessageBox QPushButton {background-color: #4CAF50; color: white;}"  # Set button background color to green and text color to white
+                )
+                QMessageBox.information(msg_box, 'Encryption', f'Encryption process completed.\n Time taken: {duration:.2f} seconds\n File ID: {file_id}')
+            except Exception as e:
+                msg_box = QMessageBox()
+                msg_box.setStyleSheet(
+                    "QMessageBox {background-color: #040840; color: white;}"  # Set background color to dark and text color to white
+                    "QMessageBox QLabel {color: white;}"  # Set the label text color to white
+                    "QMessageBox QPushButton {background-color: #4CAF50; color: white;}"  # Set button background color to green and text color to white
+                )
+                QMessageBox.critical(msg_box, 'Error', f'Encryption failed: {str(e)}')
+        
+
+        except ValueError as ve:
+            logging.error(f'Error converting pass_length to integer: {ve}')
             msg_box = QMessageBox()
             msg_box.setStyleSheet(
                 "QMessageBox {background-color: #040840; color: white;}"  # Set background color to dark and text color to white
                 "QMessageBox QLabel {color: white;}"  # Set the label text color to white
                 "QMessageBox QPushButton {background-color: #4CAF50; color: white;}"  # Set button background color to green and text color to white
             )
-            QMessageBox.information(msg_box, 'Encryption', f'Encryption process completed.\n Time taken: {duration:.2f} seconds\n File ID: {file_id}')
+            QMessageBox.critical(msg_box, 'Error', 'Invalid pass_length value. Please enter a valid integer value.')
         except Exception as e:
+            logging.error(f'Encryption failed: {e}')
             msg_box = QMessageBox()
             msg_box.setStyleSheet(
                 "QMessageBox {background-color: #040840; color: white;}"  # Set background color to dark and text color to white
                 "QMessageBox QLabel {color: white;}"  # Set the label text color to white
                 "QMessageBox QPushButton {background-color: #4CAF50; color: white;}"  # Set button background color to green and text color to white
             )
-            QMessageBox.critical(msg_box, 'Error', f'Encryption failed: {str(e)}')
+            QMessageBox.critical(msg_box, 'Encryption Failed', f'Encryption failed: {str(e)}', QMessageBox.Ok)
+            
 
     def decrypt_file(self):
         input_file, _ = QFileDialog.getOpenFileName(self, 'Select File to Decrypt', '', 'All Files (*)')
@@ -378,7 +404,6 @@ class CryptoApp(QWidget):
             semaphore = mp.Semaphore(1)
             fileid = file_id
             db_file = 'app_database'
-            chunk_sizes = []
             chunk_sizes,salt_encrypted = retrieve_encryption_info(db_file, fileid)
             if not salt_encrypted:
                 QMessageBox.critical(self, 'Error', 'Salt not found in the database for the specified file ID.')
@@ -410,12 +435,16 @@ class CryptoApp(QWidget):
 
             id_var = mp.Value('i', 1)
             processes = []
+            i = 0
             with open(input_file, 'rb') as f_input:
-                for i, chunk_size in enumerate(chunk_sizes):
-                    chunk = f_input.read(chunk_size)
+                while True:
+                    chunk = f_input.read(chunk_sizes)
+                    if not chunk:
+                        break
                     p = mp.Process(target=decrypt_AES, args=(key,chunk,output_file,semaphore,i+1,id_var))
                     processes.append(p)
                     p.start()
+                    i +=1
             f_input.close()
             for process in processes:
                 process.join()
