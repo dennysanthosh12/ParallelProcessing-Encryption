@@ -1,6 +1,6 @@
 Parallel Processing in Hybrid Encryption
 Overview
-This project implements parallel processing in hybrid encryption using Python, Microsoft SQL Server, and cryptography libraries. The system securely stores user credentials in a SQL Server database while employing RSA encryption for key management. Here's a breakdown of its components and functionality:
+"This project implements parallel processing in hybrid encryption using Python, Microsoft SQL Server, and cryptography libraries. The system securely stores user credentials in a SQL Server database while employing RSA encryption for key management. Here's a breakdown of its components and functionality:"
 
 Database Management: Utilizes Microsoft SQL Server for storing user data securely.
 Encryption: Implements hybrid encryption using RSA keys generated for each user.
@@ -14,12 +14,12 @@ Ensure you have the following installed and configured:
 
 Python 3.x
 Microsoft SQL Server
-Required Python packages (pyodbc, cryptography)
+"Required Python packages (pyodbc, cryptography)"
 Installation
 Clone the repository:
 
-git clone https://github.com/your/repository.git
-cd repository-name
+git clone https://github.com/dennysanthosh12/ParallelProcessing-Encryption.git
+cd ParallelProcessing-Encryption
 Install dependencies:
 
 pip install -r requirements.txt
